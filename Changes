@@ -1,0 +1,4 @@
+Revision history for Dist-Zilla-Plugin-PodPurler
+
+0.002     2009-04-21
+          we no longer choke on / reject here-docs

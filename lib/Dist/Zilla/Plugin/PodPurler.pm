@@ -81,14 +81,6 @@ sub munge_pod {
   my @pod_tokens = map {"$_"} @{ $doc->find('PPI::Token::Pod') || [] };
   $doc->prune('PPI::Token::Pod');
 
-  if (@{ $doc->find('PPI::Token::HereDoc') || [] }) {
-    $self->log(
-      sprintf "can't invoke %s on %s: PPI can't munge code with here-docs",
-        $self->plugin_name, $file->name
-    );
-    return;
-  }
-
   my $pe = 'Dist::Zilla::Plugin::PodPurler::Eventual';
 
   if ($pe->new->read_string("$doc")->events) {
@@ -165,7 +157,11 @@ sub munge_pod {
   $doc->prune('PPI::Statement::End');
   $doc->prune('PPI::Statement::Data');
 
-  $content = $end ? "$doc\n\n$newpod\n\n$end" : "$doc\n__END__\n$newpod\n";
+  my $docstr = $doc->serialize;
+
+  $content = $end
+           ? "$docstr\n\n$newpod\n\n$end"
+           : "$docstr\n__END__\n$newpod\n";
 
   $file->content($content);
 }
