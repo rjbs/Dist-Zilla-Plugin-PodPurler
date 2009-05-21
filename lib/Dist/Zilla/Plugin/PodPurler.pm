@@ -123,8 +123,6 @@ sub munge_pod {
   $self->_regroup($_->[0] => $_->[1] => \@pod)
     for ( [ attr => 'ATTRIBUTES' ], [ method => 'METHODS' ] );
 
-  use Data::Dumper; warn Dumper(\@pod);
-
   unless (_h1(AUTHOR => @pod) or _h1(AUTHORS => @pod)) {
     my @authors = $self->zilla->authors->flatten;
     my $name = @authors > 1 ? 'AUTHORS' : 'AUTHOR';
