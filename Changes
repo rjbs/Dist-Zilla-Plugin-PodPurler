@@ -1,4 +1,7 @@
 Revision history for Dist-Zilla-Plugin-PodPurler
 
+{{$NEXT}}
+          fix code to correct skip pre-existing blocks like AUTHOR
+
 0.002     2009-04-21
           we no longer choke on / reject here-docs
