@@ -50,12 +50,14 @@ sub munge_file {
     my $str = "\n=pod\n\n";
 
     EVENT: for my $event (@$events) {
+      next EVENT if $event->{type} eq 'blank';
+
       if ($event->{type} eq 'verbatim') {
         $event->{content} =~ s/^/  /mg;
         $event->{type} = 'text';
       }
 
-      if ($event->{type} eq 'text' or $event->{type} eq 'blank') {
+      if ($event->{type} eq 'text') {
         $str .= "$event->{content}\n";
         next EVENT;
       }
