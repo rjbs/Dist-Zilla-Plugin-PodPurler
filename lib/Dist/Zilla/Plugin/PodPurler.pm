@@ -55,7 +55,7 @@ sub munge_file {
         $event->{type} = 'text';
       }
 
-      if ($event->{type} eq 'text') {
+      if ($event->{type} eq 'text' or $event->{type} eq 'blank') {
         $str .= "$event->{content}\n";
         next EVENT;
       }
