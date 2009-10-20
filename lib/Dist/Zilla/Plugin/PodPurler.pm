@@ -7,7 +7,7 @@ with 'Dist::Zilla::Role::FileMunger';
 
 use namespace::autoclean;
 
-use Pod::Elemental;
+use Pod::Elemental 0.092930;
 use Pod::Elemental::Selectors -all;
 use Pod::Elemental::Transformer::Pod5;
 use Pod::Elemental::Transformer::Nester;
