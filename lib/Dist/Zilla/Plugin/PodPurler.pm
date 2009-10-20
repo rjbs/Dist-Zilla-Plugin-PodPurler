@@ -5,6 +5,14 @@ use Moose::Autobox;
 use List::MoreUtils qw(any);
 with 'Dist::Zilla::Role::FileMunger';
 
+use namespace::autoclean;
+
+use Pod::Elemental;
+use Pod::Elemental::Selectors -all;
+use Pod::Elemental::Transformer::Pod5;
+use Pod::Elemental::Transformer::Nester;
+use Pod::Elemental::Transformer::Gatherer;
+
 =head1 WARNING
 
 This code is really, really sketchy.  It's crude and brutal and will probably
@@ -44,34 +52,6 @@ sub munge_file {
   sub handle_event { push @{$_[0]}, $_[1] }
   sub events { @{ $_[0] } }
   sub read_string { my $self = shift; $self->SUPER::read_string(@_); $self }
-
-  sub write_string {
-    my ($self, $events) = @_;
-    my $str = "\n=pod\n\n";
-
-    EVENT: for my $event (@$events) {
-      next EVENT if $event->{type} eq 'blank';
-
-      if ($event->{type} eq 'verbatim') {
-        $event->{content} =~ s/^/  /mg;
-        $event->{type} = 'text';
-      }
-
-      if ($event->{type} eq 'text') {
-        $str .= "$event->{content}\n";
-        next EVENT;
-      }
-
-      $str .= "=$event->{command} $event->{content}\n";
-    }
-
-    return $str;
-  }
-}
-
-sub _h1 {
-  my $name = shift;
-  any { $_->{type} eq 'command' and $_->{content} =~ /^\Q$name\E$/m } @_;
 }
 
 sub munge_pod {
@@ -93,19 +73,74 @@ sub munge_pod {
     return;
   }
 
-  my @pod = $pe->new->read_string(join "\n", @pod_tokens)->events;
+  my $pod_str = join "\n", @pod_tokens;
+  my $document = Pod::Elemental->read_string($pod_str);
+  Pod::Elemental::Transformer::Pod5->new->transform_node($document);
 
-  unless (_h1(VERSION => @pod)) {
-    unshift @pod, (
-      { type => 'command', command => 'head1', content => "VERSION\n"  },
-      { type => 'text',   
-        content => sprintf "version %s\n", $self->zilla->version }
-    );
+  my $nester = Pod::Elemental::Transformer::Nester->new({
+    top_selector => s_command([ qw(head1 method attr) ]),
+    content_selectors => [
+      s_flat,
+      s_command( [ qw(head2 head3 head4 over item back) ]),
+    ],
+  });
+
+  $nester->transform_node($document);
+
+  my $m_gatherer = Pod::Elemental::Transformer::Gatherer->new({
+    gather_selector => s_command([ qw(method) ]),
+    container       => Pod::Elemental::Element::Nested->new({
+      command => 'head1',
+      content => "METHODS\n",
+    }),
+  });
+
+  $m_gatherer->transform_node($document);
+
+  $m_gatherer->container->children->grep(s_command('method'))->each_value(sub {
+    $_->command('head2');
+  });
+
+  my $attr_gatherer = Pod::Elemental::Transformer::Gatherer->new({
+    gather_selector => s_command([ qw(attr) ]),
+    container       => Pod::Elemental::Element::Nested->new({
+      command => 'head1',
+      content => "ATTRIBUTES\n",
+    }),
+  });
+
+  $attr_gatherer->transform_node($document);
+
+  $attr_gatherer->container->children->grep(s_command('attr'))->each_value(sub {
+    $_->command('head2');
+  });
+
+  unless (
+    $document->children->grep(sub {
+      s_command('head1', $_) and $_->content eq "VERSION\n"
+    })->length
+  ) {
+    my $version_section = Pod::Elemental::Element::Nested->new({
+      command  => 'head1',
+      content  => "VERSION\n",
+      children => [
+        Pod::Elemental::Element::Pod5::Ordinary->new({
+          content => sprintf "version %s\n", $self->zilla->version,
+        }),
+      ],
+    });
+
+    $document->children->unshift, $version_section;
   }
 
-  unless (_h1(NAME => @pod)) {
+  unless (
+    $document->children->grep(sub {
+      s_command('head1', $_) and $_->content eq "NAME\n"
+    })->length
+  ) {
     Carp::croak "couldn't find package declaration in " . $file->name
       unless my $pkg_node = $doc->find_first('PPI::Statement::Package');
+
     my $package = $pkg_node->namespace;
 
     $self->log("couldn't find abstract in " . $file->name)
@@ -114,41 +149,59 @@ sub munge_pod {
     my $name = $package;
     $name .= " - $abstract" if $abstract;
 
-    unshift @pod, (
-      { type => 'command', command => 'head1', content => "NAME\n"  },
-      { type => 'text',                        content => "$name\n" },
-    );
+    my $name_section = Pod::Elemental::Element::Nested->new({
+      command  => 'head1',
+      content  => "NAME\n",
+      children => [
+        Pod::Elemental::Element::Pod5::Ordinary->new({
+          content => "$name\n",
+        }),
+      ],
+    });
+
+    $document->children->unshift, $name_section;
   }
 
-  my (@methods, $in_method);
-
-  $self->_regroup($_->[0] => $_->[1] => \@pod)
-    for ( [ attr => 'ATTRIBUTES' ], [ method => 'METHODS' ] );
-
-  unless (_h1(AUTHOR => @pod) or _h1(AUTHORS => @pod)) {
+  unless (
+    $document->children->grep(sub {
+      s_command('head1', $_) and $_->content =~ /\AAUTHORS?\n\z/
+    })->length
+  ) {
     my @authors = $self->zilla->authors->flatten;
     my $name = @authors > 1 ? 'AUTHORS' : 'AUTHOR';
 
-    push @pod, (
-      { type => 'command',  command => 'head1', content => "$name\n" },
-      { type => 'verbatim',
-        content => join("\n", @authors) . "\n"
-      }
-    );
+    my $author_section = Pod::Elemental::Element::Nested->new({
+      command  => 'head1',
+      content  => "$name\n",
+      children => [
+        Pod::Elemental::Element::Pod5::Ordinary->new({
+          content => join("\n", @authors) . "\n"
+        }),
+      ],
+    });
+
+    $document->children->unshift, $author_section;
   }
 
-  unless (_h1(COPYRIGHT => @pod) or _h1(LICENSE => @pod)) {
-    push @pod, (
-      { type => 'command', command => 'head1',
-        content => "COPYRIGHT AND LICENSE\n" },
-      { type => 'text', content => $self->zilla->license->notice }
-    );
+  unless (
+    $document->children->grep(sub {
+      s_command('head1', $_) and $_->content =~ /\A(?:COPYRIGHT|LICENSE)\n\z/
+    })->length
+  ) {
+    my $legal_section = Pod::Elemental::Element::Nested->new({
+      command  => 'head1',
+      content  => "COPYRIGHT AND LICENSE\n",
+      children => [
+        Pod::Elemental::Element::Pod5::Ordinary->new({
+          content => $self->zilla->liense->notice
+        }),
+      ],
+    });
+
+    $document->children->unshift, $legal_section;
   }
 
-  @pod = grep { $_->{type} ne 'command' or $_->{command} ne 'cut' } @pod;
-  push @pod, { type => 'command', command => 'cut', content => "\n" };
-
-  my $newpod = $pe->write_string(\@pod);
+  my $newpod = $document->as_pod_string;
 
   my $end = do {
     my $end_elem = $doc->find('PPI::Statement::Data')
@@ -166,48 +219,6 @@ sub munge_pod {
            : "$docstr\n__END__\n$newpod\n";
 
   $file->content($content);
-}
-
-sub _regroup {
-  my ($self, $cmd, $header, $pod) = @_;
-
-  my @items;
-  my $in_item;
-
-  EVENT: for (my $i = 0; $i < @$pod; $i++) {
-    my $event = $pod->[$i];
-
-    if ($event->{type} eq 'command' and $event->{command} eq $cmd) {
-      $in_item = 1;
-      push @items, splice @$pod, $i--, 1;
-      next EVENT;
-    }
-
-    if (
-      $event->{type} eq 'command'
-      and $event->{command} !~ /^(?:over|item|back|head[3456])$/
-    ) {
-      $in_item = 0;
-      next EVENT;
-    }
-
-    push @items, splice @$pod, $i--, 1 if $in_item;
-  }
-      
-  if (@items) {
-    unless (_h1($header => @$pod)) {
-      push @$pod, {
-        type    => 'command',
-        command => 'head1',
-        content => "$header\n",
-      };
-    }
-
-    $_->{command} = 'head2'
-      for grep { ($_->{command}||'') eq $cmd } @items;
-
-    push @$pod, @items;
-  }
 }
 
 __PACKAGE__->meta->make_immutable;
