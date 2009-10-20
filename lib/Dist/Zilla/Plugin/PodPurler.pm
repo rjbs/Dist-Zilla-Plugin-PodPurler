@@ -87,33 +87,27 @@ sub munge_pod {
 
   $nester->transform_node($document);
 
-  my $m_gatherer = Pod::Elemental::Transformer::Gatherer->new({
-    gather_selector => s_command([ qw(method) ]),
-    container       => Pod::Elemental::Element::Nested->new({
-      command => 'head1',
-      content => "METHODS\n",
-    }),
-  });
+  for my $pair (
+    [ method => 'METHODS'    ],
+    [ attr   => 'ATTRIBUTES' ],
+  ) {
+    my $sel = s_command($pair->[0]);
+    if ($document->children->grep($sel)->length) {
+      my $gatherer = Pod::Elemental::Transformer::Gatherer->new({
+        gather_selector => $sel,
+        container       => Pod::Elemental::Element::Nested->new({
+          command => 'head1',
+          content => "$pair->[1]\n",
+        }),
+      });
 
-  $m_gatherer->transform_node($document);
+      $gatherer->transform_node($document);
 
-  $m_gatherer->container->children->grep(s_command('method'))->each_value(sub {
-    $_->command('head2');
-  });
-
-  my $attr_gatherer = Pod::Elemental::Transformer::Gatherer->new({
-    gather_selector => s_command([ qw(attr) ]),
-    container       => Pod::Elemental::Element::Nested->new({
-      command => 'head1',
-      content => "ATTRIBUTES\n",
-    }),
-  });
-
-  $attr_gatherer->transform_node($document);
-
-  $attr_gatherer->container->children->grep(s_command('attr'))->each_value(sub {
-    $_->command('head2');
-  });
+      $gatherer->container->children->grep($sel)->each_value(sub {
+        $_->command('head2');
+      });
+    }
+  }
 
   unless (
     $document->children->grep(sub {
@@ -130,7 +124,7 @@ sub munge_pod {
       ],
     });
 
-    $document->children->unshift, $version_section;
+    $document->children->unshift($version_section);
   }
 
   unless (
@@ -159,7 +153,7 @@ sub munge_pod {
       ],
     });
 
-    $document->children->unshift, $name_section;
+    $document->children->unshift($name_section);
   }
 
   unless (
@@ -180,7 +174,7 @@ sub munge_pod {
       ],
     });
 
-    $document->children->unshift, $author_section;
+    $document->children->push($author_section);
   }
 
   unless (
@@ -193,12 +187,12 @@ sub munge_pod {
       content  => "COPYRIGHT AND LICENSE\n",
       children => [
         Pod::Elemental::Element::Pod5::Ordinary->new({
-          content => $self->zilla->liense->notice
+          content => $self->zilla->license->notice
         }),
       ],
     });
 
-    $document->children->unshift, $legal_section;
+    $document->children->push($legal_section);
   }
 
   my $newpod = $document->as_pod_string;
