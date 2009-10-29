@@ -40,41 +40,10 @@ sub munge_file {
   return;
 }
 
-{
-  package Dist::Zilla::Plugin::PodPurler::Eventual;
-  our @ISA = 'Pod::Eventual';
-  sub new {
-    my ($class) = @_;
-    require Pod::Eventual;
-    bless [] => $class;
-  }
+sub munge_perl_string {
+  my ($self, $doc, $arg) = @_;
 
-  sub handle_event { push @{$_[0]}, $_[1] }
-  sub events { @{ $_[0] } }
-  sub read_string { my $self = shift; $self->SUPER::read_string(@_); $self }
-}
-
-sub munge_pod {
-  my ($self, $file) = @_;
-
-  require PPI;
-  my $content = $file->content;
-  my $doc = PPI::Document->new(\$content);
-  my @pod_tokens = map {"$_"} @{ $doc->find('PPI::Token::Pod') || [] };
-  $doc->prune('PPI::Token::Pod');
-
-  my $pe = 'Dist::Zilla::Plugin::PodPurler::Eventual';
-
-  if ($pe->new->read_string("$doc")->events) {
-    $self->log(
-      sprintf "can't invoke %s on %s: there is POD inside string literals",
-        $self->plugin_name, $file->name
-    );
-    return;
-  }
-
-  my $pod_str = join "\n", @pod_tokens;
-  my $document = Pod::Elemental->read_string($pod_str);
+  my $document = $doc->{pod};
   Pod::Elemental::Transformer::Pod5->new->transform_node($document);
 
   my $nester = Pod::Elemental::Transformer::Nester->new({
@@ -132,13 +101,13 @@ sub munge_pod {
       s_command('head1', $_) and $_->content eq "NAME\n"
     })->length
   ) {
-    Carp::croak "couldn't find package declaration in " . $file->name
-      unless my $pkg_node = $doc->find_first('PPI::Statement::Package');
+    Carp::croak "couldn't find package declaration in " . $arg->{filename}
+      unless my $pkg_node = $doc->{ppi}->find_first('PPI::Statement::Package');
 
     my $package = $pkg_node->namespace;
 
-    $self->log("couldn't find abstract in " . $file->name)
-      unless my ($abstract) = $doc =~ /^\s*#+\s*ABSTRACT:\s*(.+)$/m;
+    $self->log("couldn't find abstract in " . $arg->{filename})
+      unless my ($abstract) = $doc->{ppi} =~ /^\s*#+\s*ABSTRACT:\s*(.+)$/m;
 
     my $name = $package;
     $name .= " - $abstract" if $abstract;
@@ -195,25 +164,27 @@ sub munge_pod {
     $document->children->push($legal_section);
   }
 
-  my $newpod = $document->as_pod_string;
-
-  my $end = do {
-    my $end_elem = $doc->find('PPI::Statement::Data')
-                || $doc->find('PPI::Statement::End');
-    join q{}, @{ $end_elem || [] };
+  return {
+    pod => $document,
+    ppi => $doc->{ppi},
   };
-
-  $doc->prune('PPI::Statement::End');
-  $doc->prune('PPI::Statement::Data');
-
-  my $docstr = $doc->serialize;
-
-  $content = $end
-           ? "$docstr\n\n$newpod\n\n$end"
-           : "$docstr\n__END__\n$newpod\n";
-
-  $file->content($content);
 }
+
+sub munge_pod {
+  my ($self, $file) = @_;
+
+  my $content     = $file->content;
+  my $new_content = $self->munge_perl_string(
+    $content,
+    {
+      filename => $file->name,
+    },
+  );
+
+  $file->content($new_content);
+}
+
+with 'Pod::Elemental::PerlMunger';
 
 __PACKAGE__->meta->make_immutable;
 no Moose;
