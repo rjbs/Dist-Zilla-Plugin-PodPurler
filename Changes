@@ -1,5 +1,8 @@
 Revision history for Dist-Zilla-Plugin-PodPurler
 
+0.093020  2009-10-29
+          refactor out a lot of common code to Pod::Elemental::PerlMunger
+
 0.092930  2009-10-20
           rebuild using Pod::Elemental
 
