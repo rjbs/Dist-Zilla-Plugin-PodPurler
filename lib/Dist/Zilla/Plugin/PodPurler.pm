@@ -15,13 +15,9 @@ use Pod::Elemental::Transformer::Gatherer;
 
 =head1 WARNING
 
-This code is really, really sketchy.  It's crude and brutal and will probably
-break whatever it is you were trying to do.
-
-Unlike L<Dist::Zilla::Plugin::PodWeaver|Dist::Zilla::Plugin::PodWeaver>, this
-code will not get awesome.  In fact, it's just the old PodWeaver code, spun out
-(no pun intended) so that RJBS can use it while he fixes PodWeaver-related
-things.
+This library has been superceded by L<Pod::Weaver> and
+L<Dist::Zilla::Plugin::PodWeaver>.  It is unlikely to be updated again unless
+there are serious security problems (!?) or someone gives me money.
 
 =head1 DESCRIPTION
 
