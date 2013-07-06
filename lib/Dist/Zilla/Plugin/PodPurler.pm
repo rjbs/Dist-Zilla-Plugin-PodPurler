@@ -1,7 +1,7 @@
 package Dist::Zilla::Plugin::PodPurler;
 # ABSTRACT: like PodWeaver, but more erratic and amateurish
 use Moose;
-use Moose::Autobox;
+use Moose::Autobox 0.08;
 use List::MoreUtils qw(any);
 with 'Dist::Zilla::Role::FileMunger';
 
@@ -17,7 +17,7 @@ use Pod::Elemental::Transformer::Gatherer;
 
 This library has been superceded by L<Pod::Weaver> and
 L<Dist::Zilla::Plugin::PodWeaver>.  It is unlikely to be updated again unless
-there are serious security problems (!?) or someone gives me money.
+there are serious security problems (!?) or someone gives me some money.
 
 =head1 DESCRIPTION
 
