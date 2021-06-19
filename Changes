@@ -1,6 +1,8 @@
 Revision history for Dist-Zilla-Plugin-PodPurler
 
 {{$NEXT}}
+
+0.094     2021-06-19 10:25:00-04:00 America/New_York
           update author contact info
           add perl-support section
 
