@@ -1,6 +1,8 @@
 Revision history for Dist-Zilla-Plugin-PodPurler
 
 {{$NEXT}}
+          update author contact info
+          add perl-support section
 
 0.093401  2013-07-06 07:54:47 America/New_York
           update bug tracker, just in case
