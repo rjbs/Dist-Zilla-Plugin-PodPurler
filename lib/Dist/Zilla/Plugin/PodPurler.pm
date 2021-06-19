@@ -1,5 +1,7 @@
 package Dist::Zilla::Plugin::PodPurler;
 # ABSTRACT: like PodWeaver, but more erratic and amateurish
+
+use v5.20.0;
 use Moose;
 use Moose::Autobox 0.08;
 use List::MoreUtils qw(any);
